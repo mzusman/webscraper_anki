@@ -1,3 +1,4 @@
+from cmath import pi
 from typing import Iterable
 from bs4 import BeautifulSoup
 import sys
@@ -14,20 +15,63 @@ class YoudaoTranslate:
     waiting_for_review = []
     file = None
 
-    def __init__(self, n) -> None:
-        self.n = n
-        self.bar = tqdm(total=self.n)
+    def __init__(self ) -> None:
+        # self.n = n
+        # self.depth = depth
+        # self.bar = tqdm(total=self.n)
         self.f = Path("../known_words.txt")
         if self.f.is_file():
             self.known_words = self.__read_from_fs__()
         pass
 
+    def run(self,argv):
+        assert argv[0] not in self.known_words
+        self.known_words.append(argv[0])
+
+        hanzi,translation,pinyin,examples = self.translate(argv)
+        assert hanzi != None
+        data = self.can_send_anki(hanzi,translation,pinyin,examples)
+        if data != None:
+            self.waiting_for_review.append(data)
+        # self.bar.update(1)
+
+        for e in examples:
+            words = pseg.cut(e, use_paddle=True)
+            for word, flag in words:
+                if (
+                    flag != "r"
+                    and flag != "q"
+                    and flag != "ul"
+                    and flag != "x"
+                    and flag != "uj"
+                    and flag != "d"
+                    and flag != "ud"
+                    and word  != argv[0]
+                ):
+                    han,trans,pin,ex = self.translate([word])
+                    if han == None:
+                        continue
+                    data = self.can_send_anki(han,trans,pin,ex)
+                    if data != None:
+                        self.waiting_for_review.append(data)
+
+        # if len(self.waiting_for_review) == self.n :
+        print(self.waiting_for_review)
+        for_send = []
+        for data in self.waiting_for_review:
+            print(data["params"]["notes"][0]["fields"])
+            inp = input("want this ? Y/N ")
+            if inp == "Y" or inp == "y":
+                for_send.append(data)
+        self.waiting_for_review = []
+        if len(for_send) > 0:
+            for_send[0]["params"]["notes"] = [
+                data["params"]["notes"][0] for data in for_send
+            ]
+            self.add_to_anki(for_send[0])
+
     def translate(self, argv):
         try:
-            if argv[0] not in self.known_words:
-                self.known_words.append(argv[0])
-            else:
-                return
             hex_q = (
                 repr(argv[0].encode("utf-8"))[2:-1]
                 .replace("\\", "%")
@@ -35,7 +79,6 @@ class YoudaoTranslate:
                 .upper()
             )
             url = f"https://www.youdao.com/result?word={hex_q}&lang=en"
-            # print(argv[0])
             result = requests.get(url, timeout=10)
             a = BeautifulSoup(result.content, "html5lib")
             b = [
@@ -56,41 +99,14 @@ class YoudaoTranslate:
                 if len(c.split("\xa0")) == 1 and len(argv[0]) > 1:
                     examples.append(c)
 
-                # else:
-                #     if len(c.split("\xa0")) > 1:
-                #         c = c.split("\xa0")[1]
-                #         c = c.split(
-                #             [char for char in c if char > "\u4e00" and char < "\u9fff"][0]
-                #         )[0]
-                #     if len(translation) == 0:
-                #         translation.append(c)
-
             if len(translation) > 1:
                 translation = translation[:2]
-            # if argv[0] not in self.known_words:
-            self.add_to_anki(argv[0], translation, pinyin, examples)
-            for e in examples:
-                words = pseg.cut(c, use_paddle=True)
-                for word, flag in words:
-                    if (
-                        flag != "r"
-                        and flag != "q"
-                        and flag != "ul"
-                        and flag != "x"
-                        and flag != "uj"
-                        and flag != "d"
-                        and flag != "ud"
-                    ):
-                        # print("%s %s" % (word, flag))
-                        self.translate([word])
-            if len(argv[0]) > 1:
-                for char in argv[0]:
-                    self.translate([char])
+            return (argv[0], translation, pinyin, examples)
         except Exception as e:
-            print(e)
+            return (None,None,None,None)
             pass
 
-    def add_to_anki(self, hanzi, translation, pinyin, examples):
+    def can_send_anki(self,hanzi,translation,pinyin,examples):
         data = {
             "params": {
                 "notes": [
@@ -98,12 +114,11 @@ class YoudaoTranslate:
                         "deckName": "中文",
                         "modelName": "Chinese (Basic)",
                         "fields": {
-                            "Hanzi": hanzi,
+                            "Hanzi": hanzi ,
+                            "Examples":"<hr />".join(examples),
                             "Color": hanzi,
                             "Pinyin": pinyin,
-                            "English": "<hr / >".join(translation)
-                            + "<hr / >"
-                            + "<hr />".join(examples),
+                            "English": "<hr / >".join(translation),
                             "Sound": "",
                         },
                     }
@@ -112,32 +127,19 @@ class YoudaoTranslate:
         }
         data["action"] = "canAddNotes"
         results = requests.post("http://127.0.0.1:8765", data=json.dumps(data))
-        # print(data["params"]["notes"][0]["fields"])
+        data["action"] = "addNotes"
         if (results.content)[1:-1] == b"true":
-            data["action"] = "addNotes"
-            self.waiting_for_review.append(data)
-            self.bar.update(1)
-            if len(self.waiting_for_review) == self.n:
-                for_send = []
-                for data in self.waiting_for_review:
-                    print(data["params"]["notes"][0]["fields"])
-                    inp = input("want this ? Y/N ")
-                    if inp == "Y" or inp == "y":
-                        for_send.append(data)
-                if len(for_send) > 0:
-                    for_send[0]["params"]["notes"] = [
-                        data["params"]["notes"][0] for data in for_send
-                    ]
-                    results = requests.post(
-                        "http://127.0.0.1:8765", data=json.dumps(for_send[0])
-                    )
-                self.waiting_for_review = []
-                self.bar.refresh()
-                self.bar.reset(total=self.n)
-                already_known = self.__read_from_fs__()
-                self.__write_to_fs__([w for w in self.known_words if w not in already_known])
-                self.known_words = self.__read_from_fs__()
-                print(results.content)
+            return data
+        return None
+
+
+    def add_to_anki(self, datas):
+            results = requests.post( "http://127.0.0.1:8765", data=json.dumps(datas))
+
+            already_known = self.__read_from_fs__()
+            self.__write_to_fs__([w for w in self.known_words if w not in already_known])
+            self.known_words = self.__read_from_fs__()
+            print(results.content)
 
     def __write_to_fs__(self, batch_known:Iterable[str]):
         self.file = open(self.f, "a")
@@ -156,4 +158,4 @@ class YoudaoTranslate:
 
 
 if __name__ == "__main__":
-    YoudaoTranslate(int(sys.argv[2])).translate(sys.argv[1:])
+    YoudaoTranslate().run(sys.argv[1:])
