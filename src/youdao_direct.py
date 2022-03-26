@@ -47,16 +47,18 @@ class YoudaoTranslate:
                     and flag != "d"
                     and flag != "ud"
                     and word  != argv[0]
+                    and word not in self.known_words
                 ):
                     han,trans,pin,ex = self.translate([word])
                     if han == None:
                         continue
+                    self.known_words.append(word)
                     data = self.can_send_anki(han,trans,pin,ex)
                     if data != None:
                         self.waiting_for_review.append(data)
 
         # if len(self.waiting_for_review) == self.n :
-        print(self.waiting_for_review)
+        # print(self.waiting_for_review)
         for_send = []
         for data in self.waiting_for_review:
             print(data["params"]["notes"][0]["fields"])
@@ -69,6 +71,11 @@ class YoudaoTranslate:
                 data["params"]["notes"][0] for data in for_send
             ]
             self.add_to_anki(for_send[0])
+
+        already_known = self.__read_from_fs__()
+        self.__write_to_fs__([w for w in self.known_words if w not in already_known])
+        self.known_words = self.__read_from_fs__()
+
 
     def translate(self, argv):
         try:
@@ -135,11 +142,8 @@ class YoudaoTranslate:
 
     def add_to_anki(self, datas):
             results = requests.post( "http://127.0.0.1:8765", data=json.dumps(datas))
-
-            already_known = self.__read_from_fs__()
-            self.__write_to_fs__([w for w in self.known_words if w not in already_known])
-            self.known_words = self.__read_from_fs__()
             print(results.content)
+
 
     def __write_to_fs__(self, batch_known:Iterable[str]):
         self.file = open(self.f, "a")
@@ -148,12 +152,10 @@ class YoudaoTranslate:
         self.file.close()
 
     def __read_from_fs__(self) -> Iterable[str]:
-        print("found fs cache")
         self.file = open(self.f, "r")
         self.file.seek(0)
         a = [w[1:] for w in self.file.readlines()[0].split(",")]
         self.file.close()
-        print(a)
         return a
 
 
