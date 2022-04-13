@@ -8,10 +8,12 @@ import jieba
 import jieba.posseg as pseg
 from tqdm import tqdm
 from pathlib import Path
-
+import utils
 
 class YoudaoTranslate:
     known_words = []
+    deck_name = "中文"
+    model_name = "Chinese (Basic)"
     waiting_for_review = []
     file = None
 
@@ -30,7 +32,15 @@ class YoudaoTranslate:
 
         hanzi,translation,pinyin,examples = self.translate(argv)
         assert hanzi != None
-        data = self.can_send_anki(hanzi,translation,pinyin,examples)
+        data = utils.addNote(self.deck_name,self.model_name,{
+                        "Hanzi": hanzi ,
+                        "Examples":"<hr />".join(examples),
+                        "Color": hanzi,
+                        "Pinyin": pinyin,
+                        "English": "<hr / >".join(translation),
+                        "Sound": "",
+                    })
+
         if data != None:
             self.waiting_for_review.append(data)
         # self.bar.update(1)
@@ -112,33 +122,6 @@ class YoudaoTranslate:
         except Exception as e:
             return (None,None,None,None)
             pass
-
-    def can_send_anki(self,hanzi,translation,pinyin,examples):
-        data = {
-            "params": {
-                "notes": [
-                    {
-                        "deckName": "中文",
-                        "modelName": "Chinese (Basic)",
-                        "fields": {
-                            "Hanzi": hanzi ,
-                            "Examples":"<hr />".join(examples),
-                            "Color": hanzi,
-                            "Pinyin": pinyin,
-                            "English": "<hr / >".join(translation),
-                            "Sound": "",
-                        },
-                    }
-                ]
-            },
-        }
-        data["action"] = "canAddNotes"
-        results = requests.post("http://127.0.0.1:8765", data=json.dumps(data))
-        data["action"] = "addNotes"
-        if (results.content)[1:-1] == b"true":
-            return data
-        return None
-
 
     def add_to_anki(self, datas):
             results = requests.post( "http://127.0.0.1:8765", data=json.dumps(datas))
