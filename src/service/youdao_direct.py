@@ -43,7 +43,6 @@ class YoudaoTranslate:
 
         if data != None:
             self.waiting_for_review.append(data)
-        # self.bar.update(1)
 
         for e in examples:
             words = pseg.cut(e, use_paddle=True)
@@ -77,9 +76,7 @@ class YoudaoTranslate:
                 for_send.append(data)
         self.waiting_for_review = []
         if len(for_send) > 0:
-            for_send[0]["params"]["notes"] = [
-                data["params"]["notes"][0] for data in for_send
-            ]
+            for_send[0]["params"]["notes"] = [data["params"]["notes"][0] for data in for_send]
             self.add_to_anki(for_send[0])
 
         already_known = self.__read_from_fs__()
