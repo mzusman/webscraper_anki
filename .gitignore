@@ -1,3 +1,4 @@
 known_words.txt
 *DS*
 .vscode*/**
+__pycache__
