@@ -32,7 +32,7 @@ class YoudaoTranslate:
 
         hanzi,translation,pinyin,examples = self.translate(argv)
         assert hanzi != None
-        data = utils.addNote(self.deck_name,self.model_name,{
+        data = utils.add_note(self.deck_name,self.model_name,{
                         "Hanzi": hanzi ,
                         "Examples":"<hr />".join(examples),
                         "Color": hanzi,
