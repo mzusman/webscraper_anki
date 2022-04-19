@@ -68,6 +68,7 @@ class YoudaoTranslate:
 
         # if len(self.waiting_for_review) == self.n :
         # print(self.waiting_for_review)
+
         for_send = []
         for data in self.waiting_for_review:
             print(data["params"]["notes"][0]["fields"])
@@ -118,10 +119,9 @@ class YoudaoTranslate:
             return (argv[0], translation, pinyin, examples)
         except Exception as e:
             return (None,None,None,None)
-            pass
 
     def add_to_anki(self, datas):
-            results = requests.post( "http://127.0.0.1:8765", data=json.dumps(datas))
+            results = requests.post("http://127.0.0.1:8765", data=json.dumps(datas))
             print(results.content)
 
 
