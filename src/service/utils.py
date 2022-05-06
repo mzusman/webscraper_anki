@@ -1,7 +1,9 @@
 import requests
 import json
 
-from ..service import ANKI_URL
+ANKI_URL = "http://127.0.0.1:8765"
+# ANKI_URL = "https://5602-79-183-2-134.eu.ngrok.io"
+
 
 def update_by_id(id,fields):
     data = {
@@ -61,6 +63,7 @@ def find_notes(regex):
 
 def add_note(deck_name, model_name, fields):
     data = {
+        "version":6,
         "params": {
             "notes": [
                 {
@@ -71,10 +74,13 @@ def add_note(deck_name, model_name, fields):
             ]
         }
     }
+    print(fields)
     data["action"] = "canAddNotes"
     results = requests.post(ANKI_URL, data=json.dumps(data))
     data["action"] = "addNotes"
-    if (results.content)[1:-1] == b"true":
+    print(results.content)
+    if (json.loads(results.content))["result"][0] == True:
+        print(json.loads(requests.post(ANKI_URL, data=json.dumps(data)).content)["result"])
         return data
     return None
 

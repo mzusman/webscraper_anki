@@ -1,1 +1,1 @@
-ANKI_URL = "http://127.0.0.1:8765"
+ANKI_URL = "https://5602-79-183-2-134.eu.ngrok.io"

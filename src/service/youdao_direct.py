@@ -1,5 +1,6 @@
 from cmath import pi
 from typing import Iterable
+import argparse
 from bs4 import BeautifulSoup
 import sys
 import json
@@ -8,6 +9,7 @@ import jieba
 import jieba.posseg as pseg
 from tqdm import tqdm
 from pathlib import Path
+from options import WebscrapperAnkiOptions
 import utils
 
 class YoudaoTranslate:
@@ -16,6 +18,17 @@ class YoudaoTranslate:
     model_name = "Chinese (Basic)"
     waiting_for_review = []
     file = None
+
+    def __to_data__(self,hanzi,translation, pinyin, examples, ex_tr):
+        return { "Hanzi": hanzi ,
+                        "Examples":"<hr />".join(examples),
+                        "Color": hanzi,
+                        "Pinyin": pinyin,
+                        "English": "<hr / >".join(translation),
+                        "ExamplesTrans": "<hr / >".join(ex_tr),
+                        "Sound": "",
+                    }
+
 
     def __init__(self ) -> None:
         # self.n = n
@@ -26,59 +39,55 @@ class YoudaoTranslate:
             self.known_words = self.__read_from_fs__()
         pass
 
-    def run(self,argv):
+    def run(self,argv,add_examples_words):
         assert argv[0] not in self.known_words
         self.known_words.append(argv[0])
 
-        hanzi,translation,pinyin,examples = self.translate(argv)
-        assert hanzi != None
-        data = utils.add_note(self.deck_name,self.model_name,{
-                        "Hanzi": hanzi ,
-                        "Examples":"<hr />".join(examples),
-                        "Color": hanzi,
-                        "Pinyin": pinyin,
-                        "English": "<hr / >".join(translation),
-                        "Sound": "",
-                    })
+        args = self.translate(argv)
+        data = utils.add_note(self.deck_name,self.model_name,self.__to_data__(*args ) )
 
         if data != None:
             self.waiting_for_review.append(data)
 
-        for e in examples:
-            words = pseg.cut(e, use_paddle=True)
-            for word, flag in words:
-                if (
-                    flag != "r"
-                    and flag != "q"
-                    and flag != "ul"
-                    and flag != "x"
-                    and flag != "uj"
-                    and flag != "d"
-                    and flag != "ud"
-                    and word  != argv[0]
-                    and word not in self.known_words
-                ):
-                    han,trans,pin,ex = self.translate([word])
-                    if han == None:
-                        continue
-                    self.known_words.append(word)
-                    data = self.can_send_anki(han,trans,pin,ex)
-                    if data != None:
-                        self.waiting_for_review.append(data)
+
+        if add_examples_words:
+            for e in args[-2]:
+                words = pseg.cut(e, use_paddle=True)
+                for word, flag in words:
+                    if (
+                        flag != "r"
+                        and flag != "q"
+                        and flag != "ul"
+                        and flag != "x"
+                        and flag != "uj"
+                        and flag != "d"
+                        and flag != "ud"
+                        and word  != argv[0]
+                        and word not in self.known_words
+                    ):
+                        argse = self.translate([word])
+                        if argse[0] == None:
+                            continue
+                        self.known_words.append(word)
+                        # data = utils.can_send_anki(han,trans,pin,ex,tr_ex)
+                        data = utils.add_note(self.deck_name,self.model_name,self.__to_data__(*argse))
+                        if data != None:
+                            self.waiting_for_review.append(data)
+
 
         # if len(self.waiting_for_review) == self.n :
         # print(self.waiting_for_review)
 
-        for_send = []
-        for data in self.waiting_for_review:
-            print(data["params"]["notes"][0]["fields"])
-            inp = input("want this ? Y/N ")
-            if inp == "Y" or inp == "y":
-                for_send.append(data)
-        self.waiting_for_review = []
-        if len(for_send) > 0:
-            for_send[0]["params"]["notes"] = [data["params"]["notes"][0] for data in for_send]
-            self.add_to_anki(for_send[0])
+        # for_send = []
+        # for data in self.waiting_for_review:
+        #     print(data["params"]["notes"][0]["fields"])
+        #     inp = input("want this ? Y/N ")
+        #     if inp == "Y" or inp == "y":
+        #         for_send.append(data)
+        # self.waiting_for_review = []
+        # if len(for_send) > 0:
+        #     for_send[0]["params"]["notes"] = [data["params"]["notes"][0] for data in for_send]
+        #     self.add_to_anki(for_send[0])
 
         already_known = self.__read_from_fs__()
         self.__write_to_fs__([w for w in self.known_words if w not in already_known])
@@ -96,6 +105,7 @@ class YoudaoTranslate:
             url = f"https://www.youdao.com/result?word={hex_q}&lang=en"
             result = requests.get(url, timeout=10)
             a = BeautifulSoup(result.content, "html5lib")
+            # print(a)
             b = [
                 div.get_text()
                 for div in a.find_all("div")
@@ -107,6 +117,10 @@ class YoudaoTranslate:
             translation = [
                 div.get_text() for div in a.find_all("div", {"class": "trans-ce"})
             ]
+            examples_tran = [
+                div.get_text() for div in a.find_all("div", {"class": "sen-ch"})
+            ]
+            # print(examples_tran)
             examples = []
             pinyin = pinyin.split("/")[1]
             for i in range(len(b)):
@@ -116,9 +130,9 @@ class YoudaoTranslate:
 
             if len(translation) > 1:
                 translation = translation[:2]
-            return (argv[0], translation, pinyin, examples)
+            return (argv[0], translation, pinyin, examples,examples_tran)
         except Exception as e:
-            return (None,None,None,None)
+            return (None,None,None,None,None)
 
     def add_to_anki(self, datas):
             results = requests.post("http://127.0.0.1:8765", data=json.dumps(datas))
@@ -140,4 +154,17 @@ class YoudaoTranslate:
 
 
 if __name__ == "__main__":
-    YoudaoTranslate().run(sys.argv[1:])
+    opts = WebscrapperAnkiOptions().parse()
+    words = None
+    if opts.inline is not None:
+        words = opts.inline
+    if opts.file is not None:
+        f = open(opts.file,'r')
+        words = [l[:-1] for l in f.readlines() ]
+        f.close()
+        print(words)
+    for word in words:
+        try:
+            YoudaoTranslate().run([word],opts.examples_words)
+        except Exception:
+            pass
