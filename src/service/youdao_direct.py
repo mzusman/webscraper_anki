@@ -34,13 +34,15 @@ class YoudaoTranslate:
         # self.n = n
         # self.depth = depth
         # self.bar = tqdm(total=self.n)
-        self.f = Path("../known_words.txt")
+        self.f = Path("../../known_words.txt")
         if self.f.is_file():
             self.known_words = self.__read_from_fs__()
+            # print(self.known_words)
         pass
 
     def run(self,argv,add_examples_words):
-        assert argv[0] not in self.known_words
+        if argv[0] in self.known_words:
+            return
         self.known_words.append(argv[0])
 
         args = self.translate(argv)
@@ -74,6 +76,12 @@ class YoudaoTranslate:
                         if data != None:
                             self.waiting_for_review.append(data)
 
+        already_known = self.__read_from_fs__()
+        self.__write_to_fs__([w for w in self.known_words if w not in already_known])
+        self.known_words = self.__read_from_fs__()
+
+
+
 
         # if len(self.waiting_for_review) == self.n :
         # print(self.waiting_for_review)
@@ -88,11 +96,6 @@ class YoudaoTranslate:
         # if len(for_send) > 0:
         #     for_send[0]["params"]["notes"] = [data["params"]["notes"][0] for data in for_send]
         #     self.add_to_anki(for_send[0])
-
-        already_known = self.__read_from_fs__()
-        self.__write_to_fs__([w for w in self.known_words if w not in already_known])
-        self.known_words = self.__read_from_fs__()
-
 
     def translate(self, argv):
         try:
@@ -132,6 +135,7 @@ class YoudaoTranslate:
                 translation = translation[:2]
             return (argv[0], translation, pinyin, examples,examples_tran)
         except Exception as e:
+            print(e)
             return (None,None,None,None,None)
 
     def add_to_anki(self, datas):
@@ -140,8 +144,9 @@ class YoudaoTranslate:
 
 
     def __write_to_fs__(self, batch_known:Iterable[str]):
+        # print(batch_known)
         self.file = open(self.f, "a")
-        for a in [f"${word}," for word in batch_known]:
+        for a in [f",${word}," for word in batch_known]:
             self.file.write(a)
         self.file.close()
 
@@ -162,9 +167,10 @@ if __name__ == "__main__":
         f = open(opts.file,'r')
         words = [l[:-1] for l in f.readlines() ]
         f.close()
-        print(words)
+        # print(words)
     for word in words:
         try:
             YoudaoTranslate().run([word],opts.examples_words)
-        except Exception:
+        except Exception as e:
+            print(e)
             pass
